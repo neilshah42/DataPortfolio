@@ -1,0 +1,397 @@
+---
+title: "Is there a relationship between seafood consumption and life expectancy?"
+author: "Sam Ricafrente, Harrison Pearce, Neil Shah, Arushi Sharma"
+date: "3/2/2022"
+output: 
+  html_document:
+    theme: spacelab
+    code_folding: "hide"
+---
+
+<style type="text/css">
+  body{ 
+  font-size: 12pt;
+} 
+</style>
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.align = "center")
+```
+
+
+```{r libraries}
+library(tidyverse)
+library(here)
+library(broom)
+library(viridis)
+library(kableExtra)
+library(gganimate)
+library(gifski)
+library(knitr)
+library(DT)
+library(plotly)
+```
+
+
+# __Introduction__  
+Consuming a healthy diet is an essential component in life to most individuals today. The primary incentive behind this is to live a long and salubrious life. Exploring the elements of a healthy diet led us to numerous articles indicating the significance of seafood consumption. Whether it be the Mediterranean diet, Keto diet, Atkins diet, vertical diet, carnivore diet, or simply a pescatarian diet, seafood is a vital component. For example, *Medical News Today* states that seafood consumption lowers cancer risk, improves cardiovascular health, and reduces inflammation. This triggered an invigorating discussion between our group members regarding this proposition. Is there a relationship between seafood consumption and life expectancy? 
+
+
+# __Part One__
+The data used in this study was obtained from https://www.gapminder.org/data/
+
+
+## __The Data__  
+
+
+### __Fish Data Set__ 
+
+```{r data}
+fish <- read_csv(here("Final Project", "fisfod_cons_pc.csv"))
+``` 
+This dataset contains information about fish and seafood consumption per capita, measured in kilograms, for various countries across the world. Specifically, the dataset contains the average supply of fish and seafood per capita per year. However, the supply is the fish available for human consumption, not the actual amount of fish consumed. We are making the assumption that the nations with a higher supply of fish have a higher demand for fish and seafood across the population. Countries with higher demand will most likely have higher consumption rates, especially if they are importing large amounts of fish. In the dataset, for each country, food supply is calculated as follows: food = production + imports + stock withdrawals - exports - industrial use - animal feed - seed - wastage - additions to stock. Wastage in this case accounts for food gone bad in the exporting process that cannot be consumed anymore, but not consumption level waste. As a result, waste from restaurants or households isn’t included, so the entire food supply is slightly overestimated for each country. Finally, the data is inclusive of several fish species and major seafood commodities. 
+
+
+### __Life Expectancy Data Set__
+
+```{r}
+life <- read_csv(here("Final Project", "life_expectancy_years.csv"))
+```
+This dataset includes the life expectancy of each country’s population across the world. If mortality patterns were to continue their current trends, then we define life expectancy as the mean number of years that a newborn child would live. 
+
+
+## __Data Cleaning__  
+To continue with our investigation, we needed to first clean our data.
+
+
+### __Pivoting Longer__  
+
+```{r pivot fish}
+new_fish <- fish %>%
+  select("country", "1980":"2017") %>%
+  pivot_longer(cols = "1980":"2017",
+               names_to = "year",
+               # remember to describe what this variable is 
+               values_to = "fsc_per_capita")
+```
+
+```{r pivot life}
+new_life <- life %>%
+  select("country", "1980":"2017") %>%
+  pivot_longer(cols = "1980":"2017",
+               names_to = "year",
+               values_to = "life_expectancy")
+```
+
+The first problem we needed to address was that the values of year for each data set were spread across multiple columns. To clean our data, we pivoted these columns to be in a single column. For our Fish dataset, the columns that we have after pivoting are country, year, and fsc_per_capita. The variable fsc_per_capita stands for Fish and Seafood Consumption per Capita, measured in kilograms. Each row in this dataset represents an observation from a country. For our Life Expectancy dataset, the columns that we have after pivoting are country, year, and life_expectancy. The variable life_expectancy is measured in years. Each row in this dataset represents an observation from a country.
+
+
+### __Joining the Datasets__  
+In order to keep the variables life_expectancy and fsc_per_capita in the same dataset we joined the two separate datasets. We did this by using a left join. For our investigation, we are looking at data from 1980 to 2017. 
+
+```{r join data}
+fish_life <- new_fish %>%
+  left_join(new_life, by = c("country", "year"))
+
+datatable(fish_life, 
+          rownames = FALSE, 
+          colnames = c("Country", "Year", "FSC per Capita", "Life Expectancy"),
+          filter = "top")
+```
+
+
+## __Data Visualization__
+
+### __Linear Regression__  
+
+We fit a simple linear regression model for the relationship between life expectancy and fish and seafood consumption per capita.  Our regression equation for the relationship between fish and seafood consumption per capita and life expectancy was found to be   
+$\hat{y} = 65.7780 + 0.1389\cdot (fscpercapita)$   
+where life_expectancy was our response variable and fsc_per_capita was our explanatory. The population intercept of the equation, 65.778 years, represents the mean life expectancy of all countries with 0 kg of Fish and Seafood Consumption per Capita. The population slope, 0.1389 years/kg, represents the change in mean life expectancy associated with any given Fish and Seafood Consumption per Capita for all countries.
+
+```{r}
+windowsFonts(Times = windowsFont("Times New Roman")) 
+
+fishlife_graph <- fish_life %>%
+  ggplot(mapping = aes(x = fsc_per_capita, y = life_expectancy)) +
+  geom_point(size = 0.75, 
+             alpha = 0.8, 
+             aes(color = life_expectancy,
+                 text = paste(
+                   "Country: ", country, "\n",
+                   "Year: ", year, "\n",
+                   "FSC per Capita (kg): ", fsc_per_capita, "\n",
+                   "Life Expectancy: ", life_expectancy))) +
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(x = "Fish and Seafood Consumption per Capita (kg)", 
+       y = "Life Expectancy (years)") + 
+  scale_color_viridis(discrete = FALSE, option = "D") +
+  scale_fill_viridis(discrete = FALSE
+                     ) +
+  theme(plot.title = element_text(face = "bold"), 
+        text = element_text(family = "Times", size = 14), 
+        plot.title.position = "plot", 
+        panel.grid.minor = element_blank(),
+        legend.position="none")
+
+shiny::div(ggplotly(fishlife_graph, tooltip = "text"),align = "center")
+```
+
+This scatterplot displays the relationship between Fish and Seafood Consumption and Life Expectancy from 1980 to 2017. It can be observed that our observed data does not fit a linear model very well and may be better suited for a logarithmic regression model. The best fit line does not properly represent the observed data. The majority of the data is concentrated near the top left hand portion of the graph while few data points lie at the right hand portion, indicating a difference in just fish and seafood consumption but similar life expectancies. The reason our relationship does not fit a linear model very well is because it is misleading. The residuals in our model are large, which means that the vertical distance between an observed years of life expectancy and its predicted value is far apart. This in turn leads to a large sum of squared residuals(error), and a line is worse of a fit the larger the error is.
+
+
+### __How This Relationship Changed Over Time__
+
+```{r}
+fishlife_animate <- fish_life %>%
+  lm(life_expectancy ~ fsc_per_capita , data  = .) %>%
+  broom::augment() %>%
+  left_join(fish_life, by = c("life_expectancy", "fsc_per_capita")) %>%
+  mutate(year = as.integer(year)) %>%
+  ggplot(mapping = aes(x = fsc_per_capita, y = life_expectancy)) +
+  geom_point(size = 0.75, 
+             alpha = 0.8, 
+             aes(color = life_expectancy)) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(x = "Fish and Seafood Consumption per Capita (kg)", 
+       y = "Life Expectancy (years)",
+       title = "Year: {frame_time}") +
+  scale_color_viridis(discrete = FALSE, option = "D") +
+  scale_fill_viridis(discrete = FALSE) + 
+  transition_time(year) + 
+  theme(plot.title = element_text(face = "bold"), 
+        text = element_text(family = "Times", size = 14), 
+        plot.title.position = "plot", 
+        panel.grid.minor = element_blank(),
+        legend.position="none")
+
+
+animate(fishlife_animate, renderer = gifski_renderer(), nframes = 26, fps = 9)
+```
+
+The distribution of points is relatively similar throughout the years, however, the points collectively increase. Due to this, the best fit line is also fairly similar except the y-intercept increases slightly. It appears that the relationship between Fish and Seafood Consumption and Life Expectancy isn't affected necessarily by years. The points shifting up over time can be explained by other factors, for example, advancements in medicine and healthier lifestyles. 
+
+
+### __Model Fit__
+
+```{r}
+fishlife_table <- fish_life %>% 
+  lm(life_expectancy ~ fsc_per_capita , data  = .) %>%
+  broom::augment() %>%
+  select(life_expectancy, .fitted, .resid) %>%
+  summarise(across(everything(), ~ var(.)))
+```
+
+```{r}
+kable(fishlife_table,
+      col.names = c("Response Variance", "Fitted Value Variance", "Residual Value Variance"),
+      align = "l") %>%
+  kable_styling(font_size = 14)
+```
+
+The table above displays the variance in the response values as well as variance in the fitted values and residuals from our regression model. Looking at the variance in the fitted values, we can see that 6.862% of the variability in life expectancy was accounted for by the Fish and Seafood Consumption per Capita. The variance in the residuals shows 76.854% of the amount of variability in the life expectancies that have not been accounted for. The $R^2$ value is the proportion of the variability in the response values that was accounted for by the regression model. We can find this value by dividing the variation of the fitted value variance by the variation of the response variance.  
+
+$R^2 = 6.862298 / 83.71647 = 0.08197$  
+
+An $R^2$ value of 0.08197 indicates that 8.197% of the variability in life expectancy can be explained by the linear association between life expectancy and Fish and Seafood Consumption per Capita. The low $R^2$ value of 0.08197 suggests that Fish and Seafood Consumption per Capita is not a very good indicator of life expectancy. In other words, there is none to very little of a correlation between fish and seafood consumption (per capita) and life expectancy. Now we need to further investigate our model.
+
+
+# __Part Two__
+
+
+## __Visualizing Simulations from the Model__  
+
+Using our simple linear regression model stated earlier, we used a simulation to generate predicted life expectancy values. We then added random errors to our predicted values by applying the residual standard error value we estimated from our linear regression model acquired with sigma.
+
+```{r}
+fishlife_lm <- fish_life %>% 
+  lm(life_expectancy ~ fsc_per_capita , data  = .)
+
+# Obtaining predictions
+fishlife_predict <- predict(fishlife_lm)
+
+# Extracting the estimate of sigma
+fishlife_sigma <- sigma(fishlife_lm)
+
+# Adding errors/noise to predictions
+noise <- function(x, mean = 0, sd){
+  x + rnorm(length(x), 
+            mean, 
+            sd)
+}
+
+# Putting it all together
+new_data <- tibble(predict_life = noise(fishlife_predict, 
+                                          sd = fishlife_sigma
+                                          )
+                   )
+```
+
+
+```{r}
+new_data <- fish_life %>% 
+  filter(!is.na(fsc_per_capita), 
+         !is.na(life_expectancy)
+         ) %>% 
+  select(fsc_per_capita, life_expectancy, country, year) %>% 
+  bind_cols(new_data)
+
+newdata_graph <- new_data %>%
+  ggplot(aes(x = predict_life, 
+             y = life_expectancy,
+             text = paste(    
+               "Country: ", country, "\n",
+               "Year: ", year, "\n",
+               "Observed Value: ", life_expectancy, "\n",
+               "Simulated Value: ", round(predict_life, digits = 2)))) +
+  geom_jitter(size = 0.8, alpha = 0.4) +
+  labs(title = "Comparing Simluated Observations to Observed Data", 
+       x = "Simulated Life Expectancy (years)", 
+       y = "Observed Life Expectancy (years)") + 
+  geom_abline(slope = 1,
+              intercept = 0, 
+              color = "#124ABA",
+              linetype = "dashed",
+              lwd = 1.5) + 
+  theme(plot.title = element_text(face = "bold"), 
+        text = element_text(family = "Times", size = 14), 
+        plot.title.position = "plot", 
+        panel.grid.minor = element_blank(),
+        legend.position="none")
+
+shiny::div(ggplotly(newdata_graph, tooltip = "text"), align = "center")
+```
+
+Here, we have generated a scatterplot showing the relationship between observed life expectancy versus simulated life expectancy. We notice that there is a positive linear regression line through the points, but still not much of a correlation.
+
+```{r}
+pred <- new_data %>% 
+  ggplot(aes(y = predict_life,
+             x = fsc_per_capita )) + 
+  geom_jitter(size = 0.75, alpha = 0.2) + 
+   labs(title = "Simulated Data", 
+       x = "Fish and Seafood Consumption per Capita (kg)", 
+       y = "Life Expectancy (years)") + 
+  theme(legend.position = "none",
+        plot.title = element_text(face = "bold"), 
+        text = element_text(family = "Times"), 
+        plot.title.position = "plot", 
+        panel.grid.minor = element_blank())
+
+
+obs <- fish_life %>% 
+  ggplot(aes(y = life_expectancy,
+             x = fsc_per_capita)) + 
+  geom_jitter(size = 0.75, alpha = 0.2) + 
+  labs(title = "Observed Data", 
+       x = "Fish and Seafood Consumption per Capita (kg)", 
+       y = "Life Expectancy (years)") + 
+    theme(plot.title = element_text(face = "bold"), 
+        text = element_text(family = "Times"), 
+        plot.title.position = "plot", 
+        panel.grid.minor = element_blank(),
+        legend.position="none")
+
+gridExtra::grid.arrange(obs, pred, nrow = 1)
+```
+
+Above are visualizations of the observed and simulated life expectancies, side by side. We can see that they both have a similar shape, although the simulated data spread a bit farther than the observed data. The observed life expectancy starts around 40 years old and extends to roughly 85, while simulated life expectancy ranges from roughly 30 years old to 90.
+
+
+## __Generating Multiple Predictive Checks__
+
+```{r}
+# Simulated observations
+nsims <- 1000
+
+sims <- map_dfc(1:nsims,
+                ~ tibble(sim = noise(fishlife_predict, sd = fishlife_sigma)
+                        )
+                ) 
+
+colnames(sims) <- colnames(sims) %>% 
+  str_replace(pattern = "\\.\\.\\.",
+                  replace = "_")
+
+sims <- fish_life %>% 
+  filter(!is.na(fsc_per_capita), 
+         !is.na(life_expectancy), 
+         !is.na(country)) %>% 
+  select(life_expectancy) %>% 
+  bind_cols(sims)
+```
+
+```{r, cache = TRUE}
+sim_r_sq  <- sims %>% 
+  map(~lm(life_expectancy ~ .x, data = sims)) %>%
+  map(broom::glance) %>%
+  map_dbl(~.$r.squared)
+```
+
+```{r}
+sim_r_sq <- sim_r_sq[names(sim_r_sq) != "life_expectancy"]
+```
+
+
+Next, we are going to generate 1000 simulated datasets we expect to observe if our regression model has accurately described the relationship between seafood consumption and life expectancy. We followed by regressing the observed data against each of the 1000 simulated datasets and storing the $R^2$ value for each regression. Then we plotted each of the $R^2$ values.
+
+```{r, fig.align='center'}
+tibble(sims = sim_r_sq) %>% 
+  ggplot(aes(x = sims)) + 
+  geom_area(stat = "bin", binwidth = 0.0005, fill = "#124ABA", alpha = 0.6 ) +
+  geom_line(stat = "bin", binwidth = 0.0005, color = "#124ABA", size = 1.5) + 
+    labs(title = "Distribution of R^2 Values", 
+       x = "Sims", 
+       y = "Count") + 
+    theme(plot.title = element_text(face = "bold"), 
+        text = element_text(family = "Times"), 
+        plot.title.position = "plot", 
+        panel.grid.minor = element_blank(),
+        legend.position="none")
+```
+
+We see that the regressions follow a roughly normal distribution, slightly skewed right. However, the simulated $R^2$ values are all very low ranging from under 0.04 to slightly above 0.012. This means that the percentages that account for the variance of the life expectancy explained by the Fish and Seafood Consumption per Capita in the regression are low. The data simulated under this statistical model are not similar to the observed data at all. On average, our simulated data account for at most about 1.2% of the variability in the observed life expectancies.
+
+
+# __Conclusion__   
+The main question our project focuses on is if there is a relationship between seafood consumption and life expectancy. We fit a simple linear regression model for the relationship between life expectancy and fish and seafood consumption per capita and found the regression equation: $\hat{y} = 65.7780 + 0.1389\cdot (fscpercapita)$ . In the scatterplot showing life expectancy compared to FSC, we found that our observed data did not fit the linear model due to the large residuals and may be better suited for a logarithmic regression model. Looking at the relationship between the two over time, we observed an increase in life expectancy, most likely due to extraneous factors like healthcare. We obtained an $R^2$ value of 0.08197, indicating that 8.197% of the variability in life expectancy can be explained by the linear association between life expectancy and Fish and Seafood Consumption per Capita. This low percentage suggests that the FSC is not a good predictor of life expectancy. 
+
+When simulating 1000 generated $R^2$ values we noted the distribution ranges from roughly 0.004 to 0.012, which are essentially close to 0, meaning the data simulated under this statistical model are not similar to the observed data at all. The $R^2$ values are low because we had not changed the model to a logarithmic one, but if we did, we could have had the chance to detect a stronger relationship.
+
+From creating multiple visualizations and running simulations, we were not able to find a strong relationship between seafood consumption and life expectancy across all countries in our data from 1980 to 2017. 
+
+
+# __References__  
+__Introduction:__  
+https://www.medicalnewstoday.com/articles/322522
+
+__Creating a Table with DT:__    
+https://rstudio.github.io/DT/  
+
+__Creating a Table with Kable:__     
+https://cran.r-project.org/web/packages/kableExtra/vignettes/awesome_table_in_html.html
+
+__Interactive Plot using Plotly:__    
+https://plotly.com/r/dot-plots/  
+https://www.littlemissdata.com/blog/interactiveplots
+
+__Changing font:__   
+https://stackoverflow.com/questions/27689222/changing-fonts-for-graphs-in-r   
+
+__Changing title position:__   
+https://www.williamrchase.com/slides/assets/player/KeynoteDHTMLPlayer.html#0
+
+__Grid Customization:__    
+https://r-charts.com/ggplot2/grid/
+
+__Color Customization:__      
+https://www.datanovia.com/en/blog/ggplot-colors-best-tricks-you-will-love/
+
+__Using Latex:__    
+https://www.overleaf.com/learn/latex/Mathematical_expressions
+
+__Using gganimate:__  
+https://gganimate.com/  
+https://gganimate.com/reference/animate.html
+
+__Changing Font Size in Output:__  
+https://stackoverflow.com/questions/29274501/r-markdown-changing-font-size-and-font-type-in-html-output
